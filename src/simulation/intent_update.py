@@ -16,6 +16,7 @@ REQUIRED_INTENT_COLUMNS = {
 }
 SEED_WEIGHT = 1.0
 INSERTION_WEIGHTS = (1.25, 1.5, 1.75)
+CLEAR_OUTLIER_CONSISTENCY_THRESHOLD = 0.5
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,39 @@ def _dominant_label(
     if seed_label in tied_labels:
         return seed_label
     return sorted(tied_labels)[0]
+
+
+def _is_clear_single_outlier(seed_row: pd.Series, insertion_row: pd.Series) -> bool:
+    return bool(
+        insertion_row["genre"] != seed_row["genre"]
+        and insertion_row["mood"] != seed_row["mood"]
+        and _single_insertion_consistency(seed_row, insertion_row)
+        <= CLEAR_OUTLIER_CONSISTENCY_THRESHOLD
+    )
+
+
+def _resolve_dominant_labels(
+    seed_row: pd.Series,
+    source_rows: pd.DataFrame,
+    source_weights: list[float],
+    insertion_rows: pd.DataFrame,
+) -> tuple[str, str]:
+    if len(insertion_rows) == 1 and _is_clear_single_outlier(
+        seed_row, insertion_rows.iloc[0]
+    ):
+        return str(seed_row["genre"]), str(seed_row["mood"])
+
+    dominant_genre = _dominant_label(
+        str(seed_row["genre"]),
+        [str(value) for value in source_rows["genre"].tolist()],
+        source_weights,
+    )
+    dominant_mood = _dominant_label(
+        str(seed_row["mood"]),
+        [str(value) for value in source_rows["mood"].tolist()],
+        source_weights,
+    )
+    return dominant_genre, dominant_mood
 
 
 def _single_insertion_consistency(seed_row: pd.Series, insertion_row: pd.Series) -> float:
@@ -209,15 +243,11 @@ def update_intent_profile(
     )
     source_weights = [SEED_WEIGHT, *insertion_weights]
     centroid = _weighted_numeric_centroid(source_rows, source_weights)
-    dominant_genre = _dominant_label(
-        str(seed_row["genre"]),
-        [str(value) for value in source_rows["genre"].tolist()],
+    dominant_genre, dominant_mood = _resolve_dominant_labels(
+        seed_row,
+        source_rows,
         source_weights,
-    )
-    dominant_mood = _dominant_label(
-        str(seed_row["mood"]),
-        [str(value) for value in source_rows["mood"].tolist()],
-        source_weights,
+        insertion_rows,
     )
     pivot_strength = _pivot_strength(
         seed_row,

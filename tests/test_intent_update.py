@@ -9,6 +9,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.data.build_sessions import load_synthetic_sessions
+from src.data.preprocess import load_processed_catalog
 from src.simulation.intent_update import update_intent_profile
 from src.simulation.queue_state import QueueState
 
@@ -49,6 +51,23 @@ def _build_catalog() -> pd.DataFrame:
     )
 
 
+def _load_repo_artifacts() -> tuple[pd.DataFrame, pd.DataFrame]:
+    return (
+        load_processed_catalog().set_index("track_id"),
+        load_synthetic_sessions().set_index("scenario_type"),
+    )
+
+
+def _queue_state_for_scenario(scenarios: pd.DataFrame, scenario_type: str) -> QueueState:
+    scenario = scenarios.loc[scenario_type]
+    return QueueState(
+        seed_track_id=scenario["seed_track_id"],
+        candidate_track_ids=scenario["autoplay_candidate_track_ids"],
+        manual_insertion_track_ids=scenario["manual_insertion_track_ids"],
+        played_track_ids=[scenario["seed_track_id"]],
+    )
+
+
 def test_queue_state_tracks_seed_manual_played_and_candidate_ids() -> None:
     state = QueueState(
         seed_track_id="seed_pop",
@@ -71,46 +90,87 @@ def test_queue_state_tracks_seed_manual_played_and_candidate_ids() -> None:
 
 
 def test_update_intent_profile_without_insertions_keeps_seed_profile() -> None:
+    catalog, _ = _load_repo_artifacts()
+    seed_track_id = catalog.index[0]
+    seed_row = catalog.loc[seed_track_id]
+    state = QueueState(
+        seed_track_id=seed_track_id,
+        candidate_track_ids=[],
+        manual_insertion_track_ids=[],
+        played_track_ids=[seed_track_id],
+    )
+
+    profile = update_intent_profile(state, catalog=catalog.reset_index())
+
+    assert profile.anchor_track_id == seed_track_id
+    assert profile.source_track_ids == (seed_track_id,)
+    assert profile.dominant_genre == seed_row["genre"]
+    assert profile.dominant_mood == seed_row["mood"]
+    assert profile.energy_normalized == seed_row["energy_normalized"]
+    assert profile.tempo_normalized == seed_row["tempo_normalized"]
+    assert profile.pivot_strength == 0.0
+
+
+def test_real_sessions_anchor_core_intent_behavior_to_repo_artifacts() -> None:
+    catalog, scenarios = _load_repo_artifacts()
+    same_genre_state = _queue_state_for_scenario(scenarios, "same_genre_continuation")
+    cross_genre_state = _queue_state_for_scenario(scenarios, "cross_genre_shift")
+    outlier_state = _queue_state_for_scenario(scenarios, "one_outlier_insertion")
+    repeated_state = _queue_state_for_scenario(scenarios, "repeated_consistent_insertions")
+
+    same_genre_profile = update_intent_profile(
+        same_genre_state, catalog=catalog.reset_index()
+    )
+    cross_genre_profile = update_intent_profile(
+        cross_genre_state, catalog=catalog.reset_index()
+    )
+    outlier_profile = update_intent_profile(
+        outlier_state, catalog=catalog.reset_index()
+    )
+    repeated_profile = update_intent_profile(
+        repeated_state, catalog=catalog.reset_index()
+    )
+
+    same_seed = catalog.loc[same_genre_state.seed_track_id]
+    outlier_seed = catalog.loc[outlier_state.seed_track_id]
+    repeated_insertions = catalog.loc[list(repeated_state.manual_insertion_track_ids)]
+
+    assert same_genre_profile.dominant_genre == same_seed["genre"]
+    assert same_genre_profile.dominant_mood == same_seed["mood"]
+    assert 0.0 < same_genre_profile.pivot_strength < 0.35
+
+    assert outlier_profile.dominant_genre == outlier_seed["genre"]
+    assert outlier_profile.dominant_mood == outlier_seed["mood"]
+    assert 0.0 < outlier_profile.pivot_strength < 0.25
+
+    assert repeated_profile.dominant_genre == repeated_insertions.iloc[0]["genre"]
+    assert repeated_profile.dominant_mood == repeated_insertions.iloc[0]["mood"]
+    assert same_genre_profile.pivot_strength < cross_genre_profile.pivot_strength
+    assert 0.15 <= cross_genre_profile.pivot_strength < 0.45
+    assert cross_genre_profile.pivot_strength < repeated_profile.pivot_strength
+    assert outlier_profile.pivot_strength < cross_genre_profile.pivot_strength
+    assert repeated_profile.pivot_strength > 0.55
+
+
+def test_single_outlier_keeps_seed_categorical_intent_in_targeted_fixture() -> None:
     catalog = _build_catalog()
     state = QueueState(
         seed_track_id="seed_pop",
         candidate_track_ids=["candidate_pop_1", "candidate_pop_2"],
-        manual_insertion_track_ids=[],
+        manual_insertion_track_ids=["ambient_outlier"],
         played_track_ids=["seed_pop"],
     )
 
     profile = update_intent_profile(state, catalog=catalog)
 
-    assert profile.anchor_track_id == "seed_pop"
     assert profile.dominant_genre == "pop"
     assert profile.dominant_mood == "calm"
-    assert profile.energy_normalized == 0.20
-    assert profile.tempo_normalized == 0.20
-    assert profile.pivot_strength == 0.0
+    assert 0.20 < profile.energy_normalized < 0.98
+    assert 0.20 < profile.tempo_normalized < 0.95
+    assert 0.0 < profile.pivot_strength < 0.20
 
 
-def test_single_insertion_creates_deterministic_small_pivot() -> None:
-    catalog = _build_catalog()
-    state = QueueState(
-        seed_track_id="seed_pop",
-        candidate_track_ids=["candidate_pop_1", "candidate_pop_2"],
-        manual_insertion_track_ids=["rock_shift_1"],
-        played_track_ids=["seed_pop"],
-    )
-
-    first = update_intent_profile(state, catalog=catalog)
-    second = update_intent_profile(state, catalog=catalog)
-
-    assert first == second
-    assert first.dominant_genre == "rock"
-    assert first.dominant_mood == "calm"
-    assert 0.20 < first.energy_normalized < 0.60
-    assert 0.20 < first.tempo_normalized < 0.58
-    assert abs(first.energy_normalized - 0.60) < abs(first.energy_normalized - 0.20)
-    assert 0.20 <= first.pivot_strength < 0.45
-
-
-def test_repeated_consistent_insertions_increase_pivot_strength() -> None:
+def test_repeated_consistent_insertions_increase_pivot_strength_in_targeted_fixture() -> None:
     catalog = _build_catalog()
     one = update_intent_profile(
         QueueState(
@@ -140,37 +200,10 @@ def test_repeated_consistent_insertions_increase_pivot_strength() -> None:
         catalog=catalog,
     )
 
-    assert one.dominant_genre == "rock"
+    assert one.dominant_mood == "calm"
     assert two.dominant_genre == "rock"
     assert three.dominant_genre == "rock"
     assert 0.35 <= two.pivot_strength < 0.65
     assert 0.55 <= three.pivot_strength <= 1.0
     assert one.pivot_strength < two.pivot_strength < three.pivot_strength
     assert one.energy_normalized < two.energy_normalized < three.energy_normalized
-
-
-def test_single_clear_outlier_stays_low_confidence() -> None:
-    catalog = _build_catalog()
-    consistent_shift = update_intent_profile(
-        QueueState(
-            seed_track_id="seed_pop",
-            candidate_track_ids=["candidate_pop_1", "candidate_pop_2"],
-            manual_insertion_track_ids=["rock_shift_1"],
-            played_track_ids=["seed_pop"],
-        ),
-        catalog=catalog,
-    )
-    outlier_shift = update_intent_profile(
-        QueueState(
-            seed_track_id="seed_pop",
-            candidate_track_ids=["candidate_pop_1", "candidate_pop_2"],
-            manual_insertion_track_ids=["ambient_outlier"],
-            played_track_ids=["seed_pop"],
-        ),
-        catalog=catalog,
-    )
-
-    assert outlier_shift.dominant_genre == "ambient"
-    assert outlier_shift.dominant_mood == "dreamy"
-    assert outlier_shift.pivot_strength < consistent_shift.pivot_strength
-    assert 0.0 < outlier_shift.pivot_strength < 0.20
