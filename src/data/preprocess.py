@@ -5,7 +5,8 @@ from pathlib import Path
 import pandas as pd
 
 NUMERIC_FEATURE_COLUMNS = ["energy", "tempo"]
-DEFAULT_PROCESSED_CATALOG_PATH = Path("data/processed/processed_track_catalog.csv")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_PROCESSED_CATALOG_PATH = REPO_ROOT / "data/processed/processed_track_catalog.csv"
 
 
 def preprocess_catalog(catalog: pd.DataFrame) -> pd.DataFrame:
@@ -22,7 +23,7 @@ def preprocess_catalog(catalog: pd.DataFrame) -> pd.DataFrame:
         else:
             normalized_values = (numeric_values - minimum) / (maximum - minimum)
 
-        processed[f"{column}_normalized"] = normalized_values.astype(float)
+        processed[f"{column}_normalized"] = normalized_values.round(6).astype(float)
 
     return processed
 

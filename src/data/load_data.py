@@ -14,7 +14,8 @@ CANONICAL_TRACK_COLUMNS = [
     "tempo",
 ]
 
-DEFAULT_RAW_CATALOG_PATH = Path("data/raw/synthetic_track_catalog.csv")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_RAW_CATALOG_PATH = REPO_ROOT / "data/raw/synthetic_track_catalog.csv"
 
 _GENRES = ["pop", "rock", "electronic", "hip_hop", "jazz"]
 _MOODS = ["calm", "uplifting", "brooding", "driving", "dreamy"]
