@@ -2,13 +2,9 @@
 
 ## TODO
 
-- Choose one dataset strategy for Phase 2
-- Define the track feature schema
-- Create the synthetic session format
 - Implement the seed-only baseline recommender
 - Implement the queue-adaptive reranker
 - Define 3 to 5 evaluation metrics formally
-- Write unit and scenario tests
 - Generate evaluation tables and 2 to 3 plots
 - Write the README results section and the whitepaper draft
 - Draft the LinkedIn or Medium summary post
@@ -26,6 +22,11 @@
 - Write DECISIONS.md
 - Write TASKS.md
 - Add initial README, config, dependency, notebook, and report placeholders
+- Choose the Phase 2 synthetic-track dataset strategy
+- Define the synthetic catalog feature schema
+- Add deterministic preprocessing helpers and processed catalog artifact generation
+- Create the synthetic session format and deterministic session builders
+- Add unit and scenario tests for the Phase 2 data/simulation layer
 
 ## CUT
 
