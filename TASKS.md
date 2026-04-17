@@ -2,7 +2,6 @@
 
 ## TODO
 
-- Implement the seed-only baseline recommender
 - Implement the queue-adaptive reranker
 - Define 3 to 5 evaluation metrics formally
 - Generate evaluation tables and 2 to 3 plots
@@ -27,6 +26,7 @@
 - Add deterministic preprocessing helpers and processed catalog artifact generation
 - Create the synthetic session format and deterministic session builders
 - Add unit and scenario tests for the Phase 2 data/simulation layer
+- Implement the seed-only baseline recommender
 
 ## CUT
 
