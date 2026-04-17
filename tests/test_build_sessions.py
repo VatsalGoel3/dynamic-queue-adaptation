@@ -2,6 +2,8 @@ import json
 import sys
 from pathlib import Path
 
+import pandas as pd
+import pytest
 from pandas.testing import assert_frame_equal
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -11,12 +13,13 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.data.build_sessions import (
     DEFAULT_SYNTHETIC_SESSIONS_PATH,
     SCENARIO_TYPES,
+    build_default_session_artifacts,
     build_synthetic_sessions,
     load_synthetic_sessions,
     save_synthetic_sessions,
 )
 from src.data.load_data import generate_synthetic_catalog
-from src.data.preprocess import preprocess_catalog
+from src.data.preprocess import load_processed_catalog, preprocess_catalog
 
 
 def _build_processed_catalog():
@@ -41,9 +44,11 @@ def test_build_synthetic_sessions_emits_required_scenarios_and_queue_events() ->
     assert sessions["seed_track_id"].notna().all()
 
     for session in sessions.to_dict(orient="records"):
-        autoplay_candidates = _decode_track_ids(session["autoplay_candidate_track_ids"])
-        manual_insertions = _decode_track_ids(session["manual_insertion_track_ids"])
+        autoplay_candidates = session["autoplay_candidate_track_ids"]
+        manual_insertions = session["manual_insertion_track_ids"]
 
+        assert isinstance(autoplay_candidates, list)
+        assert isinstance(manual_insertions, list)
         assert len(autoplay_candidates) >= 2
         assert len(manual_insertions) >= 1
         assert session["seed_track_id"] not in autoplay_candidates
@@ -67,11 +72,11 @@ def test_synthetic_session_scenarios_encode_expected_genre_patterns() -> None:
     same_seed_genre = catalog.loc[same_genre_row["seed_track_id"], "genre"]
     same_candidate_genres = {
         catalog.loc[track_id, "genre"]
-        for track_id in _decode_track_ids(same_genre_row["autoplay_candidate_track_ids"])
+        for track_id in same_genre_row["autoplay_candidate_track_ids"]
     }
     same_manual_genres = {
         catalog.loc[track_id, "genre"]
-        for track_id in _decode_track_ids(same_genre_row["manual_insertion_track_ids"])
+        for track_id in same_genre_row["manual_insertion_track_ids"]
     }
     assert same_candidate_genres == {same_seed_genre}
     assert same_manual_genres == {same_seed_genre}
@@ -80,7 +85,7 @@ def test_synthetic_session_scenarios_encode_expected_genre_patterns() -> None:
     cross_seed_genre = catalog.loc[cross_genre_row["seed_track_id"], "genre"]
     cross_manual_genres = {
         catalog.loc[track_id, "genre"]
-        for track_id in _decode_track_ids(cross_genre_row["manual_insertion_track_ids"])
+        for track_id in cross_genre_row["manual_insertion_track_ids"]
     }
     assert len(cross_manual_genres) == 1
     assert cross_manual_genres != {cross_seed_genre}
@@ -89,11 +94,11 @@ def test_synthetic_session_scenarios_encode_expected_genre_patterns() -> None:
     outlier_seed_genre = catalog.loc[outlier_row["seed_track_id"], "genre"]
     outlier_candidate_genres = {
         catalog.loc[track_id, "genre"]
-        for track_id in _decode_track_ids(outlier_row["autoplay_candidate_track_ids"])
+        for track_id in outlier_row["autoplay_candidate_track_ids"]
     }
     outlier_manual_genres = [
         catalog.loc[track_id, "genre"]
-        for track_id in _decode_track_ids(outlier_row["manual_insertion_track_ids"])
+        for track_id in outlier_row["manual_insertion_track_ids"]
     ]
     assert outlier_candidate_genres == {outlier_seed_genre}
     assert len(outlier_manual_genres) == 1
@@ -103,7 +108,7 @@ def test_synthetic_session_scenarios_encode_expected_genre_patterns() -> None:
     repeated_seed_genre = catalog.loc[repeated_row["seed_track_id"], "genre"]
     repeated_manual_genres = [
         catalog.loc[track_id, "genre"]
-        for track_id in _decode_track_ids(repeated_row["manual_insertion_track_ids"])
+        for track_id in repeated_row["manual_insertion_track_ids"]
     ]
     assert len(repeated_manual_genres) >= 2
     assert len(set(repeated_manual_genres)) == 1
@@ -116,13 +121,72 @@ def test_synthetic_sessions_round_trip_persists_csv(tmp_path: Path) -> None:
     output_path = tmp_path / "data" / "synthetic" / "synthetic_sessions.csv"
 
     saved_path = save_synthetic_sessions(sessions, output_path=output_path)
+    persisted = pd.read_csv(saved_path)
     loaded = load_synthetic_sessions(saved_path)
 
     assert saved_path == output_path
     assert output_path.exists()
+    assert all(
+        isinstance(value, str)
+        for value in persisted["autoplay_candidate_track_ids"].tolist()
+        + persisted["manual_insertion_track_ids"].tolist()
+    )
     assert_frame_equal(loaded, sessions)
 
 
 def test_default_synthetic_artifact_path_is_anchored_to_repo_root() -> None:
     assert DEFAULT_SYNTHETIC_SESSIONS_PATH.is_absolute()
     assert DEFAULT_SYNTHETIC_SESSIONS_PATH.parent.name == "synthetic"
+
+
+def test_build_default_session_artifacts_creates_processed_and_session_outputs(
+    tmp_path: Path,
+) -> None:
+    processed_path = tmp_path / "data" / "processed" / "processed_track_catalog.csv"
+    sessions_path = tmp_path / "data" / "synthetic" / "synthetic_sessions.csv"
+
+    saved_processed_path, saved_sessions_path = build_default_session_artifacts(
+        processed_catalog_path=processed_path,
+        sessions_output_path=sessions_path,
+    )
+
+    assert saved_processed_path == processed_path
+    assert saved_sessions_path == sessions_path
+    assert processed_path.exists()
+    assert sessions_path.exists()
+    assert not load_processed_catalog(processed_path).empty
+    loaded_sessions = load_synthetic_sessions(sessions_path)
+    assert list(loaded_sessions["scenario_type"]) == SCENARIO_TYPES
+    assert all(
+        isinstance(value, list)
+        for value in loaded_sessions["autoplay_candidate_track_ids"].tolist()
+        + loaded_sessions["manual_insertion_track_ids"].tolist()
+    )
+
+
+def test_build_synthetic_sessions_rejects_undersized_catalog() -> None:
+    small_catalog = pd.DataFrame(
+        {
+            "track_id": [
+                "track_0001",
+                "track_0002",
+                "track_0003",
+                "track_0004",
+            ],
+            "artist_name": [
+                "Artist 001",
+                "Artist 002",
+                "Artist 003",
+                "Artist 004",
+            ],
+            "genre": ["pop", "pop", "rock", "rock"],
+            "energy": [0.2, 0.3, 0.4, 0.5],
+            "mood": ["calm", "calm", "driving", "driving"],
+            "tempo": [90, 100, 110, 120],
+            "energy_normalized": [0.0, 0.333333, 0.666667, 1.0],
+            "tempo_normalized": [0.0, 0.333333, 0.666667, 1.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="requires four tracks in one genre"):
+        build_synthetic_sessions(small_catalog)

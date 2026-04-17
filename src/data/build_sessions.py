@@ -30,6 +30,10 @@ SCENARIO_TYPES = [
     "one_outlier_insertion",
     "repeated_consistent_insertions",
 ]
+QUEUE_TRACK_ID_COLUMNS = [
+    "autoplay_candidate_track_ids",
+    "manual_insertion_track_ids",
+]
 
 
 def _sorted_tracks_by_genre(catalog: pd.DataFrame) -> dict[str, list[str]]:
@@ -53,6 +57,30 @@ def _genre_priority(tracks_by_genre: dict[str, list[str]]) -> list[str]:
 
 def _encode_track_ids(track_ids: list[str]) -> str:
     return json.dumps(track_ids)
+
+
+def _decode_track_ids(value: object) -> list[str]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        decoded = json.loads(value)
+        if isinstance(decoded, list) and all(isinstance(item, str) for item in decoded):
+            return decoded
+    raise ValueError("track ID fields must contain JSON-encoded string lists")
+
+
+def _encode_session_dataframe(sessions: pd.DataFrame) -> pd.DataFrame:
+    encoded = sessions.copy()
+    for column in QUEUE_TRACK_ID_COLUMNS:
+        encoded[column] = encoded[column].apply(_encode_track_ids)
+    return encoded
+
+
+def _decode_session_dataframe(sessions: pd.DataFrame) -> pd.DataFrame:
+    decoded = sessions.copy()
+    for column in QUEUE_TRACK_ID_COLUMNS:
+        decoded[column] = decoded[column].apply(_decode_track_ids)
+    return decoded
 
 
 def build_synthetic_sessions(catalog: pd.DataFrame) -> pd.DataFrame:
@@ -81,33 +109,29 @@ def build_synthetic_sessions(catalog: pd.DataFrame) -> pd.DataFrame:
             "session_id": "session_001",
             "scenario_type": "same_genre_continuation",
             "seed_track_id": primary_tracks[0],
-            "autoplay_candidate_track_ids": _encode_track_ids(primary_tracks[1:3]),
-            "manual_insertion_track_ids": _encode_track_ids([primary_tracks[3]]),
+            "autoplay_candidate_track_ids": primary_tracks[1:3],
+            "manual_insertion_track_ids": [primary_tracks[3]],
         },
         {
             "session_id": "session_002",
             "scenario_type": "cross_genre_shift",
             "seed_track_id": primary_tracks[0],
-            "autoplay_candidate_track_ids": _encode_track_ids(primary_tracks[1:3]),
-            "manual_insertion_track_ids": _encode_track_ids([secondary_tracks[0]]),
+            "autoplay_candidate_track_ids": primary_tracks[1:3],
+            "manual_insertion_track_ids": [secondary_tracks[0]],
         },
         {
             "session_id": "session_003",
             "scenario_type": "one_outlier_insertion",
             "seed_track_id": primary_tracks[1],
-            "autoplay_candidate_track_ids": _encode_track_ids(
-                [primary_tracks[0], primary_tracks[2]]
-            ),
-            "manual_insertion_track_ids": _encode_track_ids([tertiary_tracks[0]]),
+            "autoplay_candidate_track_ids": [primary_tracks[0], primary_tracks[2]],
+            "manual_insertion_track_ids": [tertiary_tracks[0]],
         },
         {
             "session_id": "session_004",
             "scenario_type": "repeated_consistent_insertions",
             "seed_track_id": primary_tracks[2],
-            "autoplay_candidate_track_ids": _encode_track_ids(primary_tracks[0:2]),
-            "manual_insertion_track_ids": _encode_track_ids(
-                [secondary_tracks[0], secondary_tracks[1]]
-            ),
+            "autoplay_candidate_track_ids": primary_tracks[0:2],
+            "manual_insertion_track_ids": [secondary_tracks[0], secondary_tracks[1]],
         },
     ]
 
@@ -119,7 +143,7 @@ def save_synthetic_sessions(
 ) -> Path:
     """Persist synthetic session definitions under the synthetic-data directory."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    sessions.to_csv(output_path, index=False)
+    _encode_session_dataframe(sessions).to_csv(output_path, index=False)
     return output_path
 
 
@@ -127,7 +151,7 @@ def load_synthetic_sessions(
     input_path: Path = DEFAULT_SYNTHETIC_SESSIONS_PATH,
 ) -> pd.DataFrame:
     """Load the saved synthetic session artifact from disk."""
-    return pd.read_csv(input_path)
+    return _decode_session_dataframe(pd.read_csv(input_path))
 
 
 def build_default_session_artifacts(
