@@ -15,7 +15,10 @@ def _normalize_exclusion_track_ids(
 ) -> set[str]:
     excluded_track_ids = {seed_track_id}
     if exclude_track_ids is not None:
-        excluded_track_ids.update(exclude_track_ids)
+        if isinstance(exclude_track_ids, str):
+            excluded_track_ids.add(exclude_track_ids)
+        else:
+            excluded_track_ids.update(exclude_track_ids)
     return excluded_track_ids
 
 
