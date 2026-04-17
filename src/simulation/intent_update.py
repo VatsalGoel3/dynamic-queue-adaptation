@@ -18,6 +18,7 @@ SEED_WEIGHT = 1.0
 INSERTION_WEIGHTS = (1.25, 1.5, 1.75)
 CLEAR_OUTLIER_CONSISTENCY_THRESHOLD = 0.5
 DOMINANT_LABEL_PIVOT_THRESHOLD = 0.35
+CANDIDATE_CONTEXT_TOTAL_WEIGHT = 0.35
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,20 @@ def _weighted_numeric_centroid(rows: pd.DataFrame, weights: list[float]) -> dict
         for column in NUMERIC_FEATURE_COLUMNS
     }
     return centroid
+
+
+def _profile_numeric_centroid(
+    source_rows: pd.DataFrame,
+    source_weights: list[float],
+    candidate_rows: pd.DataFrame,
+) -> dict[str, float]:
+    blended_rows = source_rows.copy()
+    blended_weights = source_weights.copy()
+    if not candidate_rows.empty:
+        candidate_weight = CANDIDATE_CONTEXT_TOTAL_WEIGHT / len(candidate_rows)
+        blended_rows = pd.concat([blended_rows, candidate_rows], ignore_index=True)
+        blended_weights.extend([candidate_weight] * len(candidate_rows))
+    return _weighted_numeric_centroid(blended_rows, blended_weights)
 
 
 def _weighted_label(
@@ -161,13 +176,11 @@ def _shift_signal(
     seed_row: pd.Series,
     dominant_genre: str,
     dominant_mood: str,
-    insertion_rows: pd.DataFrame,
-    insertion_weights: list[float],
+    profile_centroid: dict[str, float],
 ) -> float:
-    insertion_centroid = _weighted_numeric_centroid(insertion_rows, insertion_weights)
     numeric_shift = (
-        abs(insertion_centroid["energy_normalized"] - float(seed_row["energy_normalized"]))
-        + abs(insertion_centroid["tempo_normalized"] - float(seed_row["tempo_normalized"]))
+        abs(profile_centroid["energy_normalized"] - float(seed_row["energy_normalized"]))
+        + abs(profile_centroid["tempo_normalized"] - float(seed_row["tempo_normalized"]))
     ) / len(NUMERIC_FEATURE_COLUMNS)
     genre_shift = 0.25 if dominant_genre != seed_row["genre"] else 0.0
     mood_shift = 0.15 if dominant_mood != seed_row["mood"] else 0.0
@@ -180,6 +193,7 @@ def _pivot_strength(
     dominant_mood: str,
     insertion_rows: pd.DataFrame,
     insertion_weights: list[float],
+    profile_centroid: dict[str, float],
 ) -> float:
     if insertion_rows.empty:
         return 0.0
@@ -194,8 +208,7 @@ def _pivot_strength(
         seed_row,
         dominant_genre,
         dominant_mood,
-        insertion_rows,
-        insertion_weights,
+        profile_centroid,
     )
     return round(insert_weight_share * consistency * shift_signal, 6)
 
@@ -223,9 +236,11 @@ def _surface_dominant_labels(
     pivot_strength: float,
     insertion_rows: pd.DataFrame,
 ) -> tuple[str, str]:
-    if len(insertion_rows) == 1 and (
-        pivot_strength < DOMINANT_LABEL_PIVOT_THRESHOLD
-        or _is_clear_single_outlier(seed_row, insertion_rows.iloc[0])
+    if pivot_strength < DOMINANT_LABEL_PIVOT_THRESHOLD:
+        return str(seed_row["genre"]), str(seed_row["mood"])
+
+    if len(insertion_rows) == 1 and _is_clear_single_outlier(
+        seed_row, insertion_rows.iloc[0]
     ):
         return str(seed_row["genre"]), str(seed_row["mood"])
 
@@ -256,6 +271,12 @@ def update_intent_profile(
         )
 
     insertion_rows = _rows_for_track_ids(validated_catalog, insertion_track_ids)
+    remaining_candidate_rows = _rows_for_track_ids(
+        validated_catalog,
+        queue_state.remaining_candidate_track_ids,
+    ) if queue_state.remaining_candidate_track_ids else pd.DataFrame(
+        columns=validated_catalog.columns
+    )
     insertion_weights = [
         _weight_for_insertion(index) for index in range(len(insertion_track_ids))
     ]
@@ -267,7 +288,11 @@ def update_intent_profile(
         ignore_index=True,
     )
     source_weights = [SEED_WEIGHT, *insertion_weights]
-    centroid = _weighted_numeric_centroid(source_rows, source_weights)
+    centroid = _profile_numeric_centroid(
+        source_rows,
+        source_weights,
+        remaining_candidate_rows,
+    )
     insertion_preferred_genre, insertion_preferred_mood = _insertion_preferred_labels(
         insertion_rows,
         insertion_weights,
@@ -278,6 +303,7 @@ def update_intent_profile(
         insertion_preferred_mood,
         insertion_rows,
         insertion_weights,
+        centroid,
     )
     dominant_genre, dominant_mood = _surface_dominant_labels(
         seed_row,

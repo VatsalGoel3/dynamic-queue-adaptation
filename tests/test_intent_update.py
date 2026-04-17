@@ -25,12 +25,16 @@ def _build_catalog() -> pd.DataFrame:
                 "rock_shift_1",
                 "rock_shift_2",
                 "rock_shift_3",
+                "rock_soft_1",
+                "rock_soft_2",
                 "ambient_outlier",
             ],
             "genre": [
                 "pop",
                 "pop",
                 "pop",
+                "rock",
+                "rock",
                 "rock",
                 "rock",
                 "rock",
@@ -43,10 +47,12 @@ def _build_catalog() -> pd.DataFrame:
                 "calm",
                 "calm",
                 "calm",
+                "driving",
+                "driving",
                 "dreamy",
             ],
-            "energy_normalized": [0.20, 0.24, 0.28, 0.60, 0.62, 0.64, 0.98],
-            "tempo_normalized": [0.20, 0.24, 0.30, 0.58, 0.56, 0.60, 0.95],
+            "energy_normalized": [0.20, 0.24, 0.28, 0.60, 0.62, 0.64, 0.22, 0.24, 0.98],
+            "tempo_normalized": [0.20, 0.24, 0.30, 0.58, 0.56, 0.60, 0.22, 0.24, 0.95],
         }
     )
 
@@ -176,6 +182,39 @@ def test_intent_profile_exposes_remaining_candidates_after_seed_played_and_inser
     assert profile.remaining_candidate_track_ids == ("candidate_pop_2",)
 
 
+def test_candidate_context_changes_numeric_profile_when_remaining_queue_changes() -> None:
+    catalog = _build_catalog()
+    pop_context_profile = update_intent_profile(
+        QueueState(
+            seed_track_id="seed_pop",
+            candidate_track_ids=["candidate_pop_1", "candidate_pop_2"],
+            manual_insertion_track_ids=["rock_shift_1"],
+            played_track_ids=["seed_pop"],
+        ),
+        catalog=catalog,
+    )
+    rock_context_profile = update_intent_profile(
+        QueueState(
+            seed_track_id="seed_pop",
+            candidate_track_ids=["rock_shift_2", "rock_shift_3"],
+            manual_insertion_track_ids=["rock_shift_1"],
+            played_track_ids=["seed_pop"],
+        ),
+        catalog=catalog,
+    )
+
+    assert pop_context_profile.remaining_candidate_track_ids == (
+        "candidate_pop_1",
+        "candidate_pop_2",
+    )
+    assert rock_context_profile.remaining_candidate_track_ids == (
+        "rock_shift_2",
+        "rock_shift_3",
+    )
+    assert pop_context_profile.energy_normalized < rock_context_profile.energy_normalized
+    assert pop_context_profile.tempo_normalized < rock_context_profile.tempo_normalized
+
+
 def test_single_outlier_keeps_seed_categorical_intent_in_targeted_fixture() -> None:
     catalog = _build_catalog()
     state = QueueState(
@@ -209,6 +248,25 @@ def test_single_non_outlier_insertion_keeps_seed_categorical_anchor_in_targeted_
     assert profile.dominant_mood == "calm"
     assert profile.insertion_preferred_genre == "rock"
     assert profile.insertion_preferred_mood == "calm"
+    assert 0.15 <= profile.pivot_strength < 0.35
+
+
+def test_weak_multi_insertion_case_keeps_seed_categorical_anchor() -> None:
+    catalog = _build_catalog()
+    profile = update_intent_profile(
+        QueueState(
+            seed_track_id="seed_pop",
+            candidate_track_ids=["candidate_pop_1", "candidate_pop_2"],
+            manual_insertion_track_ids=["rock_soft_1", "rock_soft_2"],
+            played_track_ids=["seed_pop"],
+        ),
+        catalog=catalog,
+    )
+
+    assert profile.insertion_preferred_genre == "rock"
+    assert profile.insertion_preferred_mood == "driving"
+    assert profile.dominant_genre == "pop"
+    assert profile.dominant_mood == "calm"
     assert 0.15 <= profile.pivot_strength < 0.35
 
 
@@ -248,6 +306,6 @@ def test_repeated_consistent_insertions_increase_pivot_strength_in_targeted_fixt
     assert two.dominant_genre == "rock"
     assert three.dominant_genre == "rock"
     assert 0.35 <= two.pivot_strength < 0.65
-    assert 0.55 <= three.pivot_strength <= 1.0
+    assert 0.45 <= three.pivot_strength <= 1.0
     assert one.pivot_strength < two.pivot_strength < three.pivot_strength
     assert one.energy_normalized < two.energy_normalized < three.energy_normalized
