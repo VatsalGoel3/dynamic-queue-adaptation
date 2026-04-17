@@ -1,0 +1,39 @@
+project:
+  name: dynamic-queue-adaptation
+  goal: "Test whether manual queue insertions improve short-term recommendation quality over a seed-only queue."
+  phase: "Phase 0-1 scaffold"
+  random_seed: 42
+
+data:
+  source: synthetic
+  raw_dir: data/raw
+  processed_dir: data/processed
+  synthetic_dir: data/synthetic
+
+simulation:
+  top_k: 20
+  candidate_pool_size: 100
+  sessions_per_eval: 50
+
+models:
+  baseline:
+    method: seed_similarity
+  adaptive:
+    seed_weight: 1.0
+    inserted_weights:
+      - 1.5
+      - 2.0
+      - 2.0
+    confidence_mode: consistency_weighted
+
+evaluation:
+  metrics:
+    - intent_alignment
+    - adaptation_speed
+    - overreaction_penalty
+    - diversity_retention
+    - skip_proxy
+
+reports:
+  figures_dir: reports/figures
+  whitepaper_path: reports/whitepaper.md
