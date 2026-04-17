@@ -8,7 +8,6 @@ import pandas as pd
 from src.data.load_data import generate_synthetic_catalog
 from src.data.preprocess import (
     DEFAULT_PROCESSED_CATALOG_PATH,
-    load_processed_catalog,
     preprocess_catalog,
     save_processed_catalog,
 )
@@ -83,6 +82,57 @@ def _decode_session_dataframe(sessions: pd.DataFrame) -> pd.DataFrame:
     return decoded
 
 
+def _select_consistent_insertion_pair(
+    catalog: pd.DataFrame, excluded_genre: str
+) -> list[str]:
+    candidate_columns = [
+        "track_id",
+        "genre",
+        "mood",
+        "energy_normalized",
+        "tempo_normalized",
+    ]
+    candidates = catalog.loc[catalog["genre"] != excluded_genre, candidate_columns]
+    best_pair: tuple[float, float, float, str, str, str] | None = None
+
+    for genre, genre_tracks in candidates.groupby("genre"):
+        sorted_tracks = genre_tracks.sort_values(
+            ["mood", "energy_normalized", "tempo_normalized", "track_id"]
+        ).to_dict("records")
+
+        for index, first_track in enumerate(sorted_tracks):
+            for second_track in sorted_tracks[index + 1 :]:
+                if first_track["mood"] != second_track["mood"]:
+                    continue
+
+                energy_delta = abs(
+                    first_track["energy_normalized"]
+                    - second_track["energy_normalized"]
+                )
+                tempo_delta = abs(
+                    first_track["tempo_normalized"] - second_track["tempo_normalized"]
+                )
+                score = energy_delta + tempo_delta
+                candidate = (
+                    score,
+                    energy_delta,
+                    tempo_delta,
+                    genre,
+                    first_track["track_id"],
+                    second_track["track_id"],
+                )
+
+                if best_pair is None or candidate < best_pair:
+                    best_pair = candidate
+
+    if best_pair is None:
+        raise ValueError(
+            "session generation requires a same-mood insertion pair outside the seed genre"
+        )
+
+    return [best_pair[4], best_pair[5]]
+
+
 def build_synthetic_sessions(catalog: pd.DataFrame) -> pd.DataFrame:
     """Build a deterministic set of synthetic queue-adaptation sessions."""
     tracks_by_genre = _sorted_tracks_by_genre(catalog)
@@ -98,6 +148,7 @@ def build_synthetic_sessions(catalog: pd.DataFrame) -> pd.DataFrame:
     primary_tracks = tracks_by_genre[primary_genre]
     secondary_tracks = tracks_by_genre[secondary_genre]
     tertiary_tracks = tracks_by_genre[tertiary_genre]
+    repeated_insertion_pair = _select_consistent_insertion_pair(catalog, primary_genre)
 
     if len(primary_tracks) < 4:
         raise ValueError("session generation requires four tracks in one genre")
@@ -131,7 +182,7 @@ def build_synthetic_sessions(catalog: pd.DataFrame) -> pd.DataFrame:
             "scenario_type": "repeated_consistent_insertions",
             "seed_track_id": primary_tracks[2],
             "autoplay_candidate_track_ids": primary_tracks[0:2],
-            "manual_insertion_track_ids": [secondary_tracks[0], secondary_tracks[1]],
+            "manual_insertion_track_ids": repeated_insertion_pair,
         },
     ]
 
@@ -158,12 +209,9 @@ def build_default_session_artifacts(
     processed_catalog_path: Path = DEFAULT_PROCESSED_CATALOG_PATH,
     sessions_output_path: Path = DEFAULT_SYNTHETIC_SESSIONS_PATH,
 ) -> tuple[Path, Path]:
-    """Ensure the processed catalog exists and write the deterministic sessions."""
-    if processed_catalog_path.exists():
-        processed_catalog = load_processed_catalog(processed_catalog_path)
-    else:
-        processed_catalog = preprocess_catalog(generate_synthetic_catalog())
-        save_processed_catalog(processed_catalog, output_path=processed_catalog_path)
+    """Regenerate the canonical processed catalog and write deterministic sessions."""
+    processed_catalog = preprocess_catalog(generate_synthetic_catalog())
+    save_processed_catalog(processed_catalog, output_path=processed_catalog_path)
 
     sessions = build_synthetic_sessions(processed_catalog)
     saved_sessions_path = save_synthetic_sessions(sessions, output_path=sessions_output_path)

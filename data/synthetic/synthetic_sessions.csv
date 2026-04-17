@@ -2,4 +2,4 @@ session_id,scenario_type,seed_track_id,autoplay_candidate_track_ids,manual_inser
 session_001,same_genre_continuation,track_0001,"[""track_0010"", ""track_0013""]","[""track_0015""]"
 session_002,cross_genre_shift,track_0001,"[""track_0010"", ""track_0013""]","[""track_0000""]"
 session_003,one_outlier_insertion,track_0010,"[""track_0001"", ""track_0013""]","[""track_0003""]"
-session_004,repeated_consistent_insertions,track_0013,"[""track_0001"", ""track_0010""]","[""track_0000"", ""track_0009""]"
+session_004,repeated_consistent_insertions,track_0013,"[""track_0001"", ""track_0010""]","[""track_0038"", ""track_0046""]"

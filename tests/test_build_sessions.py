@@ -115,6 +115,29 @@ def test_synthetic_session_scenarios_encode_expected_genre_patterns() -> None:
     assert repeated_manual_genres[0] != repeated_seed_genre
 
 
+def test_repeated_consistent_insertions_use_coherent_tracks() -> None:
+    catalog = _build_processed_catalog().set_index("track_id")
+    sessions = build_synthetic_sessions(catalog.reset_index()).set_index("scenario_type")
+
+    repeated_row = sessions.loc["repeated_consistent_insertions"]
+    inserted_track_ids = repeated_row["manual_insertion_track_ids"]
+    inserted_tracks = catalog.loc[inserted_track_ids]
+
+    assert len(inserted_track_ids) >= 2
+    assert inserted_tracks["genre"].nunique() == 1
+    assert inserted_tracks["mood"].nunique() == 1
+    assert (
+        inserted_tracks["energy_normalized"].max()
+        - inserted_tracks["energy_normalized"].min()
+        <= 0.1
+    )
+    assert (
+        inserted_tracks["tempo_normalized"].max()
+        - inserted_tracks["tempo_normalized"].min()
+        <= 0.1
+    )
+
+
 def test_synthetic_sessions_round_trip_persists_csv(tmp_path: Path) -> None:
     catalog = _build_processed_catalog()
     sessions = build_synthetic_sessions(catalog)
@@ -162,6 +185,38 @@ def test_build_default_session_artifacts_creates_processed_and_session_outputs(
         for value in loaded_sessions["autoplay_candidate_track_ids"].tolist()
         + loaded_sessions["manual_insertion_track_ids"].tolist()
     )
+
+
+def test_build_default_session_artifacts_overwrites_noncanonical_processed_input(
+    tmp_path: Path,
+) -> None:
+    processed_path = tmp_path / "data" / "processed" / "processed_track_catalog.csv"
+    sessions_path = tmp_path / "data" / "synthetic" / "synthetic_sessions.csv"
+    noncanonical_processed = pd.DataFrame(
+        {
+            "track_id": ["bad_track"],
+            "artist_name": ["Bad Artist"],
+            "genre": ["noise"],
+            "energy": [999.0],
+            "mood": ["chaotic"],
+            "tempo": [999],
+            "energy_normalized": [999.0],
+            "tempo_normalized": [999.0],
+        }
+    )
+    canonical_processed = preprocess_catalog(generate_synthetic_catalog())
+
+    processed_path.parent.mkdir(parents=True, exist_ok=True)
+    noncanonical_processed.to_csv(processed_path, index=False)
+
+    build_default_session_artifacts(
+        processed_catalog_path=processed_path,
+        sessions_output_path=sessions_path,
+    )
+
+    regenerated_processed = load_processed_catalog(processed_path)
+
+    assert_frame_equal(regenerated_processed, canonical_processed)
 
 
 def test_build_synthetic_sessions_rejects_undersized_catalog() -> None:
