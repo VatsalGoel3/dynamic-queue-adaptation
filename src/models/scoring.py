@@ -9,7 +9,6 @@ from src.data.preprocess import DEFAULT_PROCESSED_CATALOG_PATH, load_processed_c
 NUMERIC_FEATURE_COLUMNS = ["energy_normalized", "tempo_normalized"]
 REQUIRED_SCORING_COLUMNS = {
     "track_id",
-    "artist_name",
     "genre",
     "mood",
     *NUMERIC_FEATURE_COLUMNS,

@@ -86,3 +86,54 @@ def test_score_seed_candidates_prefers_same_genre_and_closer_features() -> None:
     )
     assert scored.iloc[0]["genre_bonus"] > scored.iloc[2]["genre_bonus"]
     assert scored.iloc[0]["numeric_similarity"] > scored.iloc[-1]["numeric_similarity"]
+
+
+def test_score_seed_candidates_uses_track_id_as_deterministic_tie_breaker() -> None:
+    catalog = pd.DataFrame(
+        {
+            "track_id": ["seed_track", "candidate_b", "candidate_a"],
+            "artist_name": ["Artist Seed", "Artist B", "Artist A"],
+            "genre": ["pop", "rock", "rock"],
+            "mood": ["calm", "driving", "driving"],
+            "energy_normalized": [0.50, 0.60, 0.60],
+            "tempo_normalized": [0.50, 0.40, 0.40],
+        }
+    )
+
+    scored = score_seed_candidates("seed_track", catalog=catalog)
+
+    assert scored["track_id"].tolist() == ["candidate_a", "candidate_b"]
+    assert scored.iloc[0]["score"] == scored.iloc[1]["score"]
+    assert scored.iloc[0]["numeric_similarity"] == scored.iloc[1]["numeric_similarity"]
+    assert scored.iloc[0]["genre_bonus"] == scored.iloc[1]["genre_bonus"]
+    assert scored.iloc[0]["mood_bonus"] == scored.iloc[1]["mood_bonus"]
+
+
+def test_score_seed_candidates_exposes_mood_bonus_contribution() -> None:
+    catalog = pd.DataFrame(
+        {
+            "track_id": ["seed_track", "mood_match", "mood_miss"],
+            "artist_name": ["Artist Seed", "Artist Match", "Artist Miss"],
+            "genre": ["pop", "pop", "pop"],
+            "mood": ["calm", "calm", "driving"],
+            "energy_normalized": [0.50, 0.55, 0.55],
+            "tempo_normalized": [0.50, 0.45, 0.45],
+        }
+    )
+
+    scored = score_seed_candidates("seed_track", catalog=catalog).set_index("track_id")
+
+    assert scored.loc["mood_match", "numeric_similarity"] == scored.loc[
+        "mood_miss", "numeric_similarity"
+    ]
+    assert scored.loc["mood_match", "genre_bonus"] == scored.loc["mood_miss", "genre_bonus"]
+    assert scored.loc["mood_match", "mood_bonus"] > scored.loc["mood_miss", "mood_bonus"]
+    assert scored.loc["mood_match", "score"] > scored.loc["mood_miss", "score"]
+
+
+def test_score_seed_candidates_does_not_require_artist_name_column() -> None:
+    catalog = _build_ranked_catalog_fixture().drop(columns=["artist_name"])
+
+    scored = score_seed_candidates("seed_track", catalog=catalog)
+
+    assert not scored.empty
