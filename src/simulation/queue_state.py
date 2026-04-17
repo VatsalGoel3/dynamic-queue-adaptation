@@ -55,3 +55,20 @@ class QueueState:
             deduplicated.append(track_id)
             seen.add(track_id)
         return tuple(deduplicated)
+
+    @property
+    def remaining_candidate_track_ids(self) -> tuple[str, ...]:
+        """Return still-eligible candidate IDs after seed, played, and insertions."""
+        consumed_track_ids = {
+            self.seed_track_id,
+            *self.played_track_ids,
+            *self.manual_insertion_track_ids,
+        }
+        remaining_candidates: list[str] = []
+        seen: set[str] = set()
+        for track_id in self.candidate_track_ids:
+            if track_id in consumed_track_ids or track_id in seen:
+                continue
+            remaining_candidates.append(track_id)
+            seen.add(track_id)
+        return tuple(remaining_candidates)

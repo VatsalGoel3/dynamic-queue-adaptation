@@ -17,12 +17,16 @@ REQUIRED_INTENT_COLUMNS = {
 SEED_WEIGHT = 1.0
 INSERTION_WEIGHTS = (1.25, 1.5, 1.75)
 CLEAR_OUTLIER_CONSISTENCY_THRESHOLD = 0.5
+DOMINANT_LABEL_PIVOT_THRESHOLD = 0.35
 
 
 @dataclass(frozen=True)
 class IntentProfile:
     anchor_track_id: str
     source_track_ids: tuple[str, ...]
+    remaining_candidate_track_ids: tuple[str, ...]
+    insertion_preferred_genre: str | None
+    insertion_preferred_mood: str | None
     dominant_genre: str
     dominant_mood: str
     energy_normalized: float
@@ -66,50 +70,27 @@ def _weighted_numeric_centroid(rows: pd.DataFrame, weights: list[float]) -> dict
     return centroid
 
 
-def _dominant_label(
-    seed_label: str, labels: list[str], weights: list[float]
+def _weighted_label(
+    labels: list[str],
+    weights: list[float],
+    preferred_label: str | None = None,
 ) -> str:
     weighted_votes: dict[str, float] = {}
     for label, weight in zip(labels, weights, strict=True):
         weighted_votes[label] = weighted_votes.get(label, 0.0) + weight
     max_vote = max(weighted_votes.values())
     tied_labels = [label for label, vote in weighted_votes.items() if vote == max_vote]
-    if seed_label in tied_labels:
-        return seed_label
+    if preferred_label is not None and preferred_label in tied_labels:
+        return preferred_label
     return sorted(tied_labels)[0]
 
 
-def _is_clear_single_outlier(seed_row: pd.Series, insertion_row: pd.Series) -> bool:
-    return bool(
-        insertion_row["genre"] != seed_row["genre"]
-        and insertion_row["mood"] != seed_row["mood"]
-        and _single_insertion_consistency(seed_row, insertion_row)
-        <= CLEAR_OUTLIER_CONSISTENCY_THRESHOLD
-    )
-
-
-def _resolve_dominant_labels(
-    seed_row: pd.Series,
-    source_rows: pd.DataFrame,
-    source_weights: list[float],
-    insertion_rows: pd.DataFrame,
-) -> tuple[str, str]:
-    if len(insertion_rows) == 1 and _is_clear_single_outlier(
-        seed_row, insertion_rows.iloc[0]
-    ):
-        return str(seed_row["genre"]), str(seed_row["mood"])
-
-    dominant_genre = _dominant_label(
-        str(seed_row["genre"]),
-        [str(value) for value in source_rows["genre"].tolist()],
-        source_weights,
-    )
-    dominant_mood = _dominant_label(
-        str(seed_row["mood"]),
-        [str(value) for value in source_rows["mood"].tolist()],
-        source_weights,
-    )
-    return dominant_genre, dominant_mood
+def _dominant_label(
+    seed_label: str,
+    labels: list[str],
+    weights: list[float],
+) -> str:
+    return _weighted_label(labels, weights, preferred_label=seed_label)
 
 
 def _single_insertion_consistency(seed_row: pd.Series, insertion_row: pd.Series) -> float:
@@ -128,6 +109,15 @@ def _single_insertion_consistency(seed_row: pd.Series, insertion_row: pd.Series)
     numeric_penalty = max(0.0, (numeric_distance - 0.45) / 0.35) * 0.45
     category_penalty = 0.25 if full_category_mismatch else 0.0
     return round(max(0.2, 0.8 - numeric_penalty - category_penalty), 6)
+
+
+def _is_clear_single_outlier(seed_row: pd.Series, insertion_row: pd.Series) -> bool:
+    return bool(
+        insertion_row["genre"] != seed_row["genre"]
+        and insertion_row["mood"] != seed_row["mood"]
+        and _single_insertion_consistency(seed_row, insertion_row)
+        <= CLEAR_OUTLIER_CONSISTENCY_THRESHOLD
+    )
 
 
 def _multi_insertion_consistency(insertion_rows: pd.DataFrame) -> float:
@@ -210,6 +200,38 @@ def _pivot_strength(
     return round(insert_weight_share * consistency * shift_signal, 6)
 
 
+def _insertion_preferred_labels(
+    insertion_rows: pd.DataFrame,
+    insertion_weights: list[float],
+) -> tuple[str, str]:
+    return (
+        _weighted_label(
+            [str(value) for value in insertion_rows["genre"].tolist()],
+            insertion_weights,
+        ),
+        _weighted_label(
+            [str(value) for value in insertion_rows["mood"].tolist()],
+            insertion_weights,
+        ),
+    )
+
+
+def _surface_dominant_labels(
+    seed_row: pd.Series,
+    insertion_preferred_genre: str,
+    insertion_preferred_mood: str,
+    pivot_strength: float,
+    insertion_rows: pd.DataFrame,
+) -> tuple[str, str]:
+    if len(insertion_rows) == 1 and (
+        pivot_strength < DOMINANT_LABEL_PIVOT_THRESHOLD
+        or _is_clear_single_outlier(seed_row, insertion_rows.iloc[0])
+    ):
+        return str(seed_row["genre"]), str(seed_row["mood"])
+
+    return insertion_preferred_genre, insertion_preferred_mood
+
+
 def update_intent_profile(
     queue_state: QueueState,
     catalog: pd.DataFrame,
@@ -223,6 +245,9 @@ def update_intent_profile(
         return IntentProfile(
             anchor_track_id=queue_state.seed_track_id,
             source_track_ids=(queue_state.seed_track_id,),
+            remaining_candidate_track_ids=queue_state.remaining_candidate_track_ids,
+            insertion_preferred_genre=None,
+            insertion_preferred_mood=None,
             dominant_genre=str(seed_row["genre"]),
             dominant_mood=str(seed_row["mood"]),
             energy_normalized=round(float(seed_row["energy_normalized"]), 6),
@@ -243,23 +268,31 @@ def update_intent_profile(
     )
     source_weights = [SEED_WEIGHT, *insertion_weights]
     centroid = _weighted_numeric_centroid(source_rows, source_weights)
-    dominant_genre, dominant_mood = _resolve_dominant_labels(
-        seed_row,
-        source_rows,
-        source_weights,
+    insertion_preferred_genre, insertion_preferred_mood = _insertion_preferred_labels(
         insertion_rows,
+        insertion_weights,
     )
     pivot_strength = _pivot_strength(
         seed_row,
-        dominant_genre,
-        dominant_mood,
+        insertion_preferred_genre,
+        insertion_preferred_mood,
         insertion_rows,
         insertion_weights,
+    )
+    dominant_genre, dominant_mood = _surface_dominant_labels(
+        seed_row,
+        insertion_preferred_genre,
+        insertion_preferred_mood,
+        pivot_strength,
+        insertion_rows,
     )
 
     return IntentProfile(
         anchor_track_id=queue_state.seed_track_id,
         source_track_ids=(queue_state.seed_track_id, *insertion_track_ids),
+        remaining_candidate_track_ids=queue_state.remaining_candidate_track_ids,
+        insertion_preferred_genre=insertion_preferred_genre,
+        insertion_preferred_mood=insertion_preferred_mood,
         dominant_genre=dominant_genre,
         dominant_mood=dominant_mood,
         energy_normalized=centroid["energy_normalized"],
