@@ -25,6 +25,17 @@ def _pretty_metric_name(metric_name: str) -> str:
     return metric_name.replace("_", " ").title()
 
 
+def _weighted_mean(values: list[float], weights: list[float]) -> float:
+    if len(values) != len(weights):
+        raise ValueError("values and weights must have the same length")
+    if not values:
+        return 0.0
+    weight_sum = float(sum(weights))
+    if weight_sum <= 0.0:
+        raise ValueError("weights must sum to a positive value")
+    return float(sum(value * weight for value, weight in zip(values, weights, strict=True)) / weight_sum)
+
+
 def _load_results_summary(results_path: Path = DEFAULT_RESULTS_SUMMARY_PATH) -> pd.DataFrame:
     summary = pd.read_csv(results_path)
     required_columns = {"scenario_type"}
@@ -130,9 +141,16 @@ def generate_plots(
 
     saved_paths: list[Path] = []
 
+    session_weights = summary["session_count"].astype(float).tolist()
     metric_labels = [_pretty_metric_name(metric_name) for metric_name in METRIC_COLUMNS]
-    baseline_means = [float(summary[f"baseline_{metric_name}"].mean()) for metric_name in METRIC_COLUMNS]
-    adaptive_means = [float(summary[f"adaptive_{metric_name}"].mean()) for metric_name in METRIC_COLUMNS]
+    baseline_means = [
+        _weighted_mean(summary[f"baseline_{metric_name}"].astype(float).tolist(), session_weights)
+        for metric_name in METRIC_COLUMNS
+    ]
+    adaptive_means = [
+        _weighted_mean(summary[f"adaptive_{metric_name}"].astype(float).tolist(), session_weights)
+        for metric_name in METRIC_COLUMNS
+    ]
     overall_path = figures_dir / DEFAULT_PLOT_FILENAMES[0]
     _save_grouped_bar_chart(
         overall_path,
