@@ -10,4 +10,4 @@ What the evaluation showed: intent alignment improved in 3 of 4 deterministic sc
 
 Limitation: this is a small offline evaluation on synthetic sessions, so it does not establish statistical significance or production behavior.
 
-Repo: [dynamic-queue-adaptation](../README.md)
+Repo: https://github.com/VatsalGoel3/dynamic-queue-adaptation
