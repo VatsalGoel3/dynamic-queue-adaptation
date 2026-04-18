@@ -44,7 +44,7 @@ flowchart LR
   C --> F
   D --> F
   F --> H
-  F --> G
+  H --> G
 ```
 
 ### Queue-to-Intent-to-Reranking Flow
@@ -96,7 +96,7 @@ The prototype tracks four bounded metrics:
 
 The committed summary shows a modest positive effect from queue-aware reranking in three scenarios. Intent alignment improves in `same_genre_continuation` (+0.010591), `cross_genre_shift` (+0.025990), and `repeated_consistent_insertions` (+0.031026). The only negative case is `one_outlier_insertion` (-0.009308), which is the expected failure mode for a conservative reranker that should not overfit a single noisy insertion.
 
-The other metrics are stable across all four scenarios. `overreaction_penalty` remains at `0.0` for baseline and adaptive runs, and `diversity_retention` stays at `1.0`, so the adaptive changes are small rather than wholesale list reshuffles.
+The non-invariant companion metric is `adaptation_shift_score`, which moves slightly by scenario and is largest in `repeated_consistent_insertions`. The truly stable guardrails are `overreaction_penalty`, which remains at `0.0` for baseline and adaptive runs, and `diversity_retention`, which stays at `1.0`, so the adaptive changes remain bounded rather than wholesale list reshuffles.
 
 ## Limitations
 
