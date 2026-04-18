@@ -13,11 +13,11 @@ To test that idea, the repository compares two deterministic strategies:
 
 Everything is offline, Python-only, and reproducible from committed artifacts. The evaluation uses a processed catalog, synthetic sessions, and a fixed comparison pipeline that writes the summary table and figures under `reports/`. The whitepaper and README both describe the same setup: synthetic sessions, a small scenario set, and no external API dependencies.
 
-The committed results are modest, and that is part of the point.
+The committed results come from the deterministic scenarios in the repository.
 
-In the summary table, the adaptive reranker improves intent alignment in three of four deterministic scenarios: `same_genre_continuation` (+0.010591), `cross_genre_shift` (+0.025990), and `repeated_consistent_insertions` (+0.031026). The one caution case is `one_outlier_insertion`, where the adaptive reranker underperforms the baseline by -0.009308. That is the expected edge case for a conservative system: a single noisy insertion should not cause it to overreact.
+In the summary table, the adaptive reranker improves intent alignment in three of four deterministic scenarios: `same_genre_continuation` (+0.010591), `cross_genre_shift` (+0.025990), and `repeated_consistent_insertions` (+0.031026). The one caution case is `one_outlier_insertion`, where the adaptive reranker underperforms the baseline by -0.009308.
 
-The guardrails held. `overreaction_penalty` stays at `0.0` for both strategies across the committed scenarios, and `diversity_retention` stays at `1.0`. The adaptive path shifts slightly relative to the baseline, but it does not collapse into wholesale list churn. That matters because the goal here was not to make recommendations more volatile. It was to let the queue influence ranking just enough to reflect what the listener is doing now.
+`overreaction_penalty` stays at `0.0` for both strategies across the committed scenarios, and `diversity_retention` stays at `1.0`. The adaptive path shifts slightly relative to the baseline, but it does not collapse into wholesale list churn. That matters because the goal here was not to make recommendations more volatile. It was to let the queue influence ranking just enough to reflect what the listener is doing now.
 
 There are clear limitations. The evaluation is synthetic, offline, and deterministic. Each scenario is represented by a single committed example, so the results are directional rather than statistically conclusive. There is no live user traffic, no production integration, and no significance testing. This is a prototype, not a claim of deployment readiness.
 
@@ -27,6 +27,4 @@ First, queue behavior is a useful signal surface. The listener’s manual insert
 
 That is the main takeaway from this prototype: queue-aware ranking can respond to local intent without becoming chaotic, but the evidence here is still narrow and conservative by design.
 
-Repository: https://github.com/VatsalGoel3/dynamic-queue-adaptation
-
-For the full narrative and evaluation details, see the README and whitepaper in the repo.
+If you want the full narrative and evaluation details, the README and whitepaper live in the repository here: https://github.com/VatsalGoel3/dynamic-queue-adaptation
