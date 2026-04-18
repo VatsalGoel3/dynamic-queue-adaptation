@@ -1,0 +1,5 @@
+scenario_type,session_count,baseline_intent_alignment_score,adaptive_intent_alignment_score,adaptive_minus_baseline_intent_alignment_score,baseline_adaptation_shift_score,adaptive_adaptation_shift_score,adaptive_minus_baseline_adaptation_shift_score,baseline_overreaction_penalty,adaptive_overreaction_penalty,adaptive_minus_baseline_overreaction_penalty,baseline_diversity_retention,adaptive_diversity_retention,adaptive_minus_baseline_diversity_retention
+same_genre_continuation,1,0.730582,0.738428,0.007846,0.500000,0.503923,0.003923,0.000000,0.000000,0.000000,1.000000,0.875000,-0.125000
+cross_genre_shift,1,0.370211,0.416009,0.045798,0.500000,0.522899,0.022899,0.011996,0.045329,0.033333,1.000000,0.875000,-0.125000
+one_outlier_insertion,1,0.318227,0.327798,0.009571,0.500000,0.504785,0.004785,0.000000,0.000000,0.000000,1.000000,1.000000,0.000000
+repeated_consistent_insertions,1,0.184894,0.249630,0.064736,0.500000,0.532368,0.032368,0.000000,0.000000,0.000000,1.000000,0.666667,-0.333333
