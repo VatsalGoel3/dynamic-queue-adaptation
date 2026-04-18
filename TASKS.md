@@ -2,7 +2,6 @@
 
 ## TODO
 
-- Implement the queue-adaptive reranker
 - Define 3 to 5 evaluation metrics formally
 - Generate evaluation tables and 2 to 3 plots
 - Write the README results section and the whitepaper draft
@@ -27,6 +26,7 @@
 - Create the synthetic session format and deterministic session builders
 - Add unit and scenario tests for the Phase 2 data/simulation layer
 - Implement the seed-only baseline recommender
+- Implement the queue-aware adaptive reranker
 
 ## CUT
 
