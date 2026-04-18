@@ -173,3 +173,52 @@ def test_generate_plots_uses_non_uniform_session_counts(tmp_path: Path, monkeypa
     plain_mean = summary["baseline_intent_alignment_score"].mean()
     weighted_mean = captured_overall_values["baseline_values"][0]
     assert weighted_mean != pytest.approx(plain_mean)
+
+
+@pytest.mark.parametrize("bad_session_count", [0, -1, float("nan")])
+def test_generate_plots_rejects_malformed_session_counts(
+    tmp_path: Path,
+    bad_session_count: float,
+) -> None:
+    summary_path = tmp_path / "results_summary.csv"
+    figures_dir = tmp_path / "figures"
+    summary = pd.DataFrame(
+        [
+            {
+                "scenario_type": "scenario_a",
+                "session_count": 1,
+                "baseline_intent_alignment_score": 0.1,
+                "adaptive_intent_alignment_score": 0.2,
+                "adaptive_minus_baseline_intent_alignment_score": 0.1,
+                "baseline_adaptation_shift_score": 0.1,
+                "adaptive_adaptation_shift_score": 0.2,
+                "adaptive_minus_baseline_adaptation_shift_score": 0.1,
+                "baseline_overreaction_penalty": 0.3,
+                "adaptive_overreaction_penalty": 0.2,
+                "adaptive_minus_baseline_overreaction_penalty": -0.1,
+                "baseline_diversity_retention": 0.9,
+                "adaptive_diversity_retention": 0.8,
+                "adaptive_minus_baseline_diversity_retention": -0.1,
+            },
+            {
+                "scenario_type": "scenario_b",
+                "session_count": bad_session_count,
+                "baseline_intent_alignment_score": 0.4,
+                "adaptive_intent_alignment_score": 0.5,
+                "adaptive_minus_baseline_intent_alignment_score": 0.1,
+                "baseline_adaptation_shift_score": 0.2,
+                "adaptive_adaptation_shift_score": 0.3,
+                "adaptive_minus_baseline_adaptation_shift_score": 0.1,
+                "baseline_overreaction_penalty": 0.1,
+                "adaptive_overreaction_penalty": 0.0,
+                "adaptive_minus_baseline_overreaction_penalty": -0.1,
+                "baseline_diversity_retention": 0.7,
+                "adaptive_diversity_retention": 0.6,
+                "adaptive_minus_baseline_diversity_retention": -0.1,
+            },
+        ]
+    )
+    summary.to_csv(summary_path, index=False)
+
+    with pytest.raises(ValueError, match="session_count values must be finite and strictly positive"):
+        generate_plots(results_path=summary_path, figures_dir=figures_dir)

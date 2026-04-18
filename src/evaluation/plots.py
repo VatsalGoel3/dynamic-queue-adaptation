@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import matplotlib
@@ -51,6 +52,9 @@ def _load_results_summary(results_path: Path = DEFAULT_RESULTS_SUMMARY_PATH) -> 
     if missing_columns:
         missing = ", ".join(sorted(missing_columns))
         raise ValueError(f"results summary is missing required columns: {missing}")
+    session_counts = summary["session_count"].tolist()
+    if any(not math.isfinite(float(session_count)) or float(session_count) <= 0.0 for session_count in session_counts):
+        raise ValueError("results summary session_count values must be finite and strictly positive")
     return summary
 
 
