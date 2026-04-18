@@ -27,6 +27,7 @@
 - Define 3 to 5 evaluation metrics formally
 - Generate evaluation tables and 2 to 3 plots
 - Write the README results section and the whitepaper draft
+- Complete Phase 6 repo polish and reproducibility cleanup, including editable-install package discovery for `src`
 
 ## CUT
 
