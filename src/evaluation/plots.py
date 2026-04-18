@@ -38,7 +38,7 @@ def _weighted_mean(values: list[float], weights: list[float]) -> float:
 
 def _load_results_summary(results_path: Path = DEFAULT_RESULTS_SUMMARY_PATH) -> pd.DataFrame:
     summary = pd.read_csv(results_path)
-    required_columns = {"scenario_type"}
+    required_columns = {"scenario_type", "session_count"}
     for metric_name in METRIC_COLUMNS:
         required_columns.update(
             {
