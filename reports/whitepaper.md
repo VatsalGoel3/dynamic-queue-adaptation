@@ -2,58 +2,109 @@
 
 ## Abstract
 
-This prototype evaluates whether manual queue insertions provide a useful short-term intent signal for music recommendation. A seed-only baseline recommends from the original track context, while an adaptive reranker reorders the remaining candidates after observed insertions. The current Phase 5 work focuses on offline evaluation only.
+This note summarizes an offline prototype that tests whether manual queue insertions can act as short-term intent signals in a music recommendation workflow. The comparison is between a seed-only baseline and a queue-aware adaptive reranker operating over the same deterministic catalog and synthetic sessions. The committed results show a small but consistent intent-alignment gain in three of four scenarios, with one deliberate caution case where the adaptive reranker underperforms the baseline.
 
 ## Problem Statement
 
-Seed-only recommendation can miss immediate session intent once a listener starts adding tracks to a queue. The goal here is not to solve long-horizon personalization, but to measure whether a lightweight reranker can track the local shift more accurately than a static baseline without overreacting.
+Music recommendations often start from a single seed track, but the user's intent can shift as soon as they start inserting tracks into a queue. A static ranker can miss that local shift. The question here is narrow: can a lightweight reranker respond to queue insertions without introducing unstable list reshuffles or regressing diversity?
 
 ## Method
 
-The system compares two ranking strategies over the same processed catalog and deterministic synthetic sessions:
+The repository compares two ranking strategies over the same input artifacts:
 
-- Baseline: recommend from the seed track only.
-- Adaptive: rerank remaining candidates after the queue state is updated with manual insertions.
+- Baseline: rank candidates from the seed track only.
+- Adaptive: update queue state with manual insertions, infer the local intent signal, and rerank the remaining candidates.
 
-Evaluation is computed from the committed summary artifact at `reports/results_summary.csv` and visualized in `reports/figures/`.
+### System Architecture
 
-## Experimental Setup
+```mermaid
+flowchart LR
+  subgraph Data["Data preparation"]
+    A["src.data.build_sessions\nsynthetic session generator"]
+    B["src.data.preprocess\nprocessed track catalog"]
+  end
 
-- Catalog: deterministic processed synthetic track catalog
-- Sessions: four synthetic scenario types
-- Top-k: fixed by repository config and reused by the comparison pipeline
-- Comparison unit: one baseline/adaptive pair per scenario
-- Output artifact: `reports/results_summary.csv`
+  subgraph Rankers["Ranking strategies"]
+    C["src.models.baseline_seed\nseed-only ranking"]
+    D["src.models.adaptive_reranker\nqueue-aware reranking"]
+    E["src.simulation.queue_state\nseed, plays, manual insertions"]
+  end
 
-The four scenario types are:
+  subgraph Evaluation["Evaluation and reporting"]
+    F["src.evaluation.compare_models\nmetric comparison"]
+    G["src.evaluation.plots\nreport figures"]
+    H["reports/results_summary.csv"]
+  end
+
+  A --> E
+  B --> C
+  B --> D
+  E --> C
+  E --> D
+  C --> F
+  D --> F
+  F --> H
+  F --> G
+```
+
+### Queue-to-Intent-to-Reranking Flow
+
+```mermaid
+flowchart TD
+  S["Seed track"] --> Q["Initial queue state"]
+  Q --> M["Observe manual insertion(s)"]
+  M --> I["Infer local intent from queue context"]
+  I --> C["Score remaining candidates"]
+  C --> R["Rerank top-k list"]
+  R --> O["Return updated recommendations"]
+
+  Q -. baseline path .-> B["Seed-only ranking"]
+  B -. no queue update .-> O
+```
+
+## Data and Simulation Setup
+
+The evaluation is fully offline and deterministic. It uses a processed synthetic catalog and four synthetic scenario types, each represented by one committed session:
+
+- `data/processed/processed_track_catalog.csv`
+- `data/synthetic/synthetic_sessions.csv`
+- `reports/results_summary.csv`
+
+The scenario set is intentionally small and designed to probe distinct queue behaviors:
 
 - `same_genre_continuation`
 - `cross_genre_shift`
 - `one_outlier_insertion`
 - `repeated_consistent_insertions`
 
+The comparison pipeline writes the scenario-level summary in `reports/results_summary.csv` and the plots in `reports/figures/`:
+
+- `reports/figures/overall_metric_comparison.png`
+- `reports/figures/scenario_intent_alignment.png`
+- `reports/figures/scenario_metric_deltas.png`
+
 ## Metrics
 
-The evaluation uses four simple, bounded metrics:
+The prototype tracks four bounded metrics:
 
-- `intent_alignment_score`: how well the ranked list matches the inferred session intent
-- `adaptation_shift_score`: how much the adaptive list improves over the baseline
-- `overreaction_penalty`: a conservative check on excessive shifting
-- `diversity_retention`: how much of the baseline diversity survives the rerank
+- `intent_alignment_score`: how closely the ranked list matches inferred session intent
+- `adaptation_shift_score`: how much the adaptive ranker shifts relative to the baseline
+- `overreaction_penalty`: a guardrail for excessive movement in the ranked list
+- `diversity_retention`: how much of the baseline diversity is preserved after reranking
 
-## Results Summary
+## Results
 
-The committed results show a narrow, directional improvement in intent alignment for the adaptive reranker in three of the four scenarios. The largest gain appears in `repeated_consistent_insertions`, followed by `cross_genre_shift`; `same_genre_continuation` also improves slightly. The `one_outlier_insertion` scenario is the only case where adaptive intent alignment drops below baseline, which is the expected caution case for a conservative reranker.
+The committed summary shows a modest positive effect from queue-aware reranking in three scenarios. Intent alignment improves in `same_genre_continuation` (+0.010591), `cross_genre_shift` (+0.025990), and `repeated_consistent_insertions` (+0.031026). The only negative case is `one_outlier_insertion` (-0.009308), which is the expected failure mode for a conservative reranker that should not overfit a single noisy insertion.
 
-Across these scenarios, the overreaction penalty remains at zero, and diversity retention stays unchanged at 1.0. That is consistent with the design goal of favoring small, bounded adjustments rather than dramatic list reshuffles.
+The other metrics are stable across all four scenarios. `overreaction_penalty` remains at `0.0` for baseline and adaptive runs, and `diversity_retention` stays at `1.0`, so the adaptive changes are small rather than wholesale list reshuffles.
 
 ## Limitations
 
-This is a prototype evaluation, not production validation. The sample size is tiny, the sessions are synthetic, the scenarios are deterministic, and there is no statistical significance analysis. The figures are useful for inspecting directional behavior, but they should not be treated as evidence of live-world uplift.
+This is a prototype evaluation, not production validation. The sample size is tiny, each scenario is deterministic, and the sessions are synthetic rather than collected from live users. The results are therefore directional only; they do not establish statistical significance or generalize on their own to real catalog traffic.
 
 ## Future Work
 
-- Expand the evaluation set beyond four synthetic scenarios
-- Add statistical comparison across more sessions
-- Test on real catalog and session data once available
-- Revisit ranking behavior if stronger pivots create visible overreaction
+- Expand beyond the current four deterministic scenarios
+- Evaluate on real interaction logs once they are available
+- Add statistical confidence reporting across larger session sets
+- Test more expressive reranking policies while preserving the bounded-change constraint
