@@ -2,7 +2,7 @@
 
 ## TODO
 
-- None
+- Issue #22: draft the Medium article, outreach note, and product feedback copy
 
 ## IN PROGRESS
 
