@@ -1,3 +1,1 @@
-When I add songs to a queue, I want the next recommendations to respond to those inserts, not stay locked to the first seed track.
-
-I want the recommendations to notice the songs I just added and adjust what comes next instead of acting like nothing changed.
+When I add songs, I want the next recommendations to notice what I just added and adjust accordingly instead of staying stuck on the first song.

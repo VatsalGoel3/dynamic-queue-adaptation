@@ -13,9 +13,9 @@ To test that idea, the repository compares two deterministic strategies:
 
 Everything is offline, Python-only, and reproducible from committed artifacts. The evaluation uses a processed catalog, synthetic sessions, and a fixed comparison pipeline that writes the summary table and figures under `reports/`. The whitepaper and README both describe the same setup: synthetic sessions, a small scenario set, and no external API dependencies.
 
-The committed results come from the deterministic scenarios in the repository.
+The committed results below come from the offline synthetic prototype and its deterministic scenarios, not from live traffic or a deployed product.
 
-In the summary table, the adaptive reranker improves intent alignment in three of four deterministic scenarios: `same_genre_continuation` (+0.010591), `cross_genre_shift` (+0.025990), and `repeated_consistent_insertions` (+0.031026). The one caution case is `one_outlier_insertion`, where the adaptive reranker underperforms the baseline by -0.009308.
+In that offline synthetic setup, the adaptive reranker improves intent alignment in three of four deterministic scenarios: `same_genre_continuation` (+0.010591), `cross_genre_shift` (+0.025990), and `repeated_consistent_insertions` (+0.031026). The one caution case is `one_outlier_insertion`, where the adaptive reranker underperforms the baseline by -0.009308.
 
 `overreaction_penalty` stays at `0.0` for both strategies across the committed scenarios, and `diversity_retention` stays at `1.0`. The adaptive path shifts slightly relative to the baseline, but it does not collapse into wholesale list churn. That matters because the goal here was not to make recommendations more volatile. It was to let the queue influence ranking just enough to reflect what the listener is doing now.
 
@@ -25,6 +25,6 @@ Even so, a few lessons are already visible.
 
 First, queue behavior is a useful signal surface. The listener’s manual insertions carry more context than the seed track alone. Second, the useful response is bounded adaptation, not aggressive re-ranking. The best-looking outcome here is not a large shift; it is a small improvement without collateral damage to diversity or stability. Third, evaluation design matters. A small deterministic setup makes it easy to understand what changed, but it also makes it easy to overread the results if you forget how limited the sample is.
 
-That is the main takeaway from this prototype: queue-aware ranking can respond to local intent without becoming chaotic, but the evidence here is still narrow and conservative by design.
+That is the main takeaway from this offline synthetic prototype: queue-aware ranking can respond to local intent without becoming chaotic, but the evidence here is still narrow and conservative by design.
 
 If you want the full narrative and evaluation details, the README and whitepaper live in the repository here: https://github.com/VatsalGoel3/dynamic-queue-adaptation
