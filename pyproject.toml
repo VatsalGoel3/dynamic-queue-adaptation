@@ -16,3 +16,8 @@ dependencies = [
     "pytest>=8.2",
     "seaborn>=0.13",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+namespaces = true

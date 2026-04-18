@@ -50,7 +50,9 @@ Install dependencies from the repository root:
 python -m pip install -e .
 ```
 
-Optional validation:
+The editable install explicitly exposes the `src` package, so the `python -m src...` commands and `from src...` imports shown below work from outside the repository root after installation.
+
+Optional validation from the repository root:
 
 ```bash
 python -m pytest
@@ -58,7 +60,7 @@ python -m pytest
 
 ## Quickstart
 
-The quickest way to reproduce the committed state is to run the artifact pipeline in order:
+The quickest way to reproduce the committed state is to run the artifact pipeline in order after the editable install above. These commands can be run from any working directory:
 
 ```bash
 python -m src.data.build_sessions
@@ -77,7 +79,7 @@ Expected outputs:
 
 ## Baseline Recommendations
 
-The baseline recommender is seed-only and deterministic. Run it from the repository root with the committed processed catalog:
+The baseline recommender is seed-only and deterministic. After `pip install -e .`, this example can be run from any working directory:
 
 ```bash
 python - <<'PY'
@@ -98,7 +100,7 @@ If you want a different seed track, replace `track_0000` with a valid `track_id`
 
 ## Adaptive Reranking
 
-The adaptive reranker takes a `QueueState`, folds in manual insertion intent, and reranks the remaining candidates:
+The adaptive reranker takes a `QueueState`, folds in manual insertion intent, and reranks the remaining candidates. After `pip install -e .`, this example can also be run from any working directory:
 
 ```bash
 python - <<'PY'
@@ -160,7 +162,7 @@ The committed Phase 5 results show a small intent-alignment gain for the adaptiv
 
 ## Current Status
 
-Phase 6 repo polish is complete. The committed artifacts, README, and task list are aligned with the current offline prototype state. The only remaining task in `TASKS.md` is post-ship communication.
+Phase 6 repo polish is complete. The editable-install path now exposes `src` correctly, the README matches the supported usage, and the only remaining task in `TASKS.md` is post-ship communication.
 
 ## Non-Goals
 
