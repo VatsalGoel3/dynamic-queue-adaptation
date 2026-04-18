@@ -47,6 +47,10 @@ def _clip_score(value: float) -> float:
     return round(max(0.0, min(1.0, value)), 6)
 
 
+def _dominant_target_labels(intent_profile: IntentProfile) -> tuple[str, str]:
+    return str(intent_profile.dominant_genre), str(intent_profile.dominant_mood)
+
+
 def _track_alignment_score(
     track: pd.Series,
     target_genre: str,
@@ -98,12 +102,11 @@ def intent_alignment_score(
 ) -> float:
     """Measure how closely the ranked list matches the current session intent."""
     _require_columns(recommendations, NUMERIC_FEATURE_COLUMNS + ("genre", "mood"))
-    target_genre = intent_profile.insertion_preferred_genre or intent_profile.dominant_genre
-    target_mood = intent_profile.insertion_preferred_mood or intent_profile.dominant_mood
+    target_genre, target_mood = _dominant_target_labels(intent_profile)
     return _list_alignment_score(
         recommendations=recommendations,
-        target_genre=str(target_genre),
-        target_mood=str(target_mood),
+        target_genre=target_genre,
+        target_mood=target_mood,
         target_energy=float(intent_profile.energy_normalized),
         target_tempo=float(intent_profile.tempo_normalized),
         top_k=top_k,
@@ -138,8 +141,7 @@ def overreaction_penalty(
 ) -> float:
     """Conservatively penalize weak-evidence shifts away from the seed context."""
     _require_columns(recommendations, NUMERIC_FEATURE_COLUMNS + ("genre", "mood"))
-    target_genre = intent_profile.insertion_preferred_genre or intent_profile.dominant_genre
-    target_mood = intent_profile.insertion_preferred_mood or intent_profile.dominant_mood
+    target_genre, target_mood = _dominant_target_labels(intent_profile)
     ranked_recommendations = _top_k_frame(recommendations, top_k)
     target_signal_share = _weighted_mean(
         [

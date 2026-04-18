@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
 from src.data.build_sessions import SCENARIO_TYPES, load_synthetic_sessions
 from src.data.preprocess import load_processed_catalog
@@ -13,7 +14,18 @@ from src.simulation.intent_update import update_intent_profile
 from src.simulation.queue_state import QueueState
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_CONFIG_PATH = REPO_ROOT / "configs/default.yaml"
 DEFAULT_RESULTS_SUMMARY_PATH = REPO_ROOT / "reports/results_summary.csv"
+
+
+def _load_default_top_k(config_path: Path = DEFAULT_CONFIG_PATH) -> int:
+    with config_path.open("r", encoding="utf-8") as config_file:
+        config = yaml.safe_load(config_file) or {}
+    simulation_config = config.get("simulation", {})
+    top_k = simulation_config.get("top_k")
+    if not isinstance(top_k, int) or top_k <= 0:
+        raise ValueError(f"invalid simulation.top_k in {config_path}")
+    return top_k
 
 
 def _queue_state_from_session(session_row: pd.Series) -> QueueState:
@@ -105,12 +117,17 @@ def _summarize_session_metrics(session_metrics: pd.DataFrame) -> pd.DataFrame:
 
 def run_comparison_pipeline(
     output_path: Path = DEFAULT_RESULTS_SUMMARY_PATH,
-    top_k: int = 5,
+    top_k: int | None = None,
 ) -> pd.DataFrame:
     """Compare baseline and adaptive rankings across the canonical session groups."""
+    resolved_top_k = _load_default_top_k() if top_k is None else top_k
     catalog = load_processed_catalog()
     sessions = load_synthetic_sessions()
-    session_metrics = _session_metric_records(catalog=catalog, sessions=sessions, top_k=top_k)
+    session_metrics = _session_metric_records(
+        catalog=catalog,
+        sessions=sessions,
+        top_k=resolved_top_k,
+    )
     if session_metrics.empty:
         raise ValueError("comparison pipeline produced no session metrics")
 

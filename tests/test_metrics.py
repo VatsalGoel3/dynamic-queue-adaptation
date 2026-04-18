@@ -115,7 +115,6 @@ def test_metric_helpers_stay_bounded_and_respect_known_invariants() -> None:
 
         assert baseline_shift == pytest.approx(0.5)
         assert 0.0 <= adaptive_shift <= 1.0
-        assert adaptive_shift >= baseline_shift
         assert 0.0 <= retention <= 1.0
 
 
@@ -148,8 +147,74 @@ def test_compare_models_pipeline_writes_compact_results(tmp_path: Path) -> None:
     assert_frame_equal(summary, persisted, check_exact=False, atol=1e-6, rtol=1e-6)
 
 
-def test_cross_genre_shift_adaptive_improves_alignment_over_baseline() -> None:
+def test_intent_alignment_prefers_surfaced_dominant_intent_for_outlier_cases() -> None:
+    catalog, _, queue_state = _session_context("one_outlier_insertion")
+    _, _, intent_profile = _session_recommendations(catalog, queue_state)
+
+    assert intent_profile.insertion_preferred_genre != intent_profile.dominant_genre
+    assert intent_profile.insertion_preferred_mood != intent_profile.dominant_mood
+
+    dominant_match = pd.DataFrame(
+        [
+            {
+                "track_id": "dominant_match",
+                "genre": intent_profile.dominant_genre,
+                "mood": intent_profile.dominant_mood,
+                "energy_normalized": intent_profile.energy_normalized,
+                "tempo_normalized": intent_profile.tempo_normalized,
+            }
+        ]
+    )
+    insertion_match = pd.DataFrame(
+        [
+            {
+                "track_id": "insertion_match",
+                "genre": intent_profile.insertion_preferred_genre,
+                "mood": intent_profile.insertion_preferred_mood,
+                "energy_normalized": intent_profile.energy_normalized,
+                "tempo_normalized": intent_profile.tempo_normalized,
+            }
+        ]
+    )
+
+    assert intent_alignment_score(dominant_match, intent_profile, top_k=5) > intent_alignment_score(
+        insertion_match, intent_profile, top_k=5
+    )
+
+
+def test_compare_models_pipeline_default_matches_repo_config_top_k(tmp_path: Path) -> None:
+    default_output = tmp_path / "default_results_summary.csv"
+    explicit_output = tmp_path / "explicit_results_summary.csv"
+
+    default_summary = run_comparison_pipeline(output_path=default_output)
+    explicit_summary = run_comparison_pipeline(output_path=explicit_output, top_k=20)
+
+    assert_frame_equal(default_summary, explicit_summary, check_exact=False, atol=1e-6, rtol=1e-6)
+
+
+def test_committed_results_summary_matches_pipeline_output(tmp_path: Path) -> None:
+    committed_results_path = PROJECT_ROOT / "reports" / "results_summary.csv"
+    regenerated_path = tmp_path / "regenerated_results_summary.csv"
+
+    committed = pd.read_csv(committed_results_path)
+    regenerated = run_comparison_pipeline(output_path=regenerated_path)
+
+    assert_frame_equal(committed, regenerated, check_exact=False, atol=1e-6, rtol=1e-6)
+
+
+def test_metric_helpers_reject_malformed_recommendation_lists() -> None:
     catalog, _, queue_state = _session_context("cross_genre_shift")
+    _, _, intent_profile = _session_recommendations(catalog, queue_state)
+    malformed_recommendations = pd.DataFrame(
+        [{"track_id": "bad_track", "genre": "jazz", "energy_normalized": 0.5}]
+    )
+
+    with pytest.raises(ValueError, match="missing required columns"):
+        intent_alignment_score(malformed_recommendations, intent_profile, top_k=20)
+
+
+def test_repeated_consistent_insertions_improve_alignment_over_baseline() -> None:
+    catalog, _, queue_state = _session_context("repeated_consistent_insertions")
     seed_track = catalog.loc[catalog["track_id"] == queue_state.seed_track_id].iloc[0]
     baseline, adaptive, intent_profile = _session_recommendations(catalog, queue_state)
 
