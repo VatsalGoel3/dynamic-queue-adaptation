@@ -6,7 +6,9 @@ This project tests one claim: manual queue insertions are useful short-term inte
 
 ## Current Status
 
-Scaffolding and project specification are complete. Phase 2 now uses a deterministic synthetic track catalog, a processed catalog artifact, and deterministic synthetic listening sessions saved under `data/synthetic`. The seed-only baseline recommender and the queue-aware adaptive reranker are now implemented, while evaluation work remains ahead.
+Scaffolding and project specification are complete. Phase 2 now uses a deterministic synthetic track catalog, a processed catalog artifact, and deterministic synthetic listening sessions saved under `data/synthetic`. The seed-only baseline recommender and the queue-aware adaptive reranker are implemented, and Phase 5 now adds the first evaluation plots and writeup.
+
+Phase 5 evaluation plots now live under `reports/figures/` and summarize the committed results in `reports/results_summary.csv`.
 
 ## Dataset Strategy
 
@@ -32,6 +34,18 @@ Phase 2 uses a fully synthetic track catalog with explicit metadata and numeric 
 - Queue-adaptive reranker
 - Synthetic or lightweight public-data-backed evaluation
 - Concise writeup and communication artifacts
+
+## Phase 5 Evaluation
+
+The current evaluation is intentionally compact: it compares the seed-only baseline against the queue-aware adaptive reranker over four deterministic synthetic scenarios. The committed results show a small but consistent intent-alignment gain in three scenarios, a slight regression in the single outlier-insertion case, and no change in the conservative diversity-retention measure.
+
+Tradeoff: the plots and summary are useful for checking directional behavior, but they are not production evidence. The setup uses synthetic sessions, one sample per scenario, and no statistical significance analysis, so the results should be read as an offline prototype check rather than a deployment-ready validation.
+
+Generated figures:
+
+- `reports/figures/overall_metric_comparison.png`
+- `reports/figures/scenario_intent_alignment.png`
+- `reports/figures/scenario_metric_deltas.png`
 
 ## Non-Goals
 
