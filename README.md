@@ -6,7 +6,7 @@ This project tests one claim: manual queue insertions are useful short-term inte
 
 ## Current Status
 
-Scaffolding and project specification are complete. Phase 2 now uses a deterministic synthetic track catalog, a processed catalog artifact, and deterministic synthetic listening sessions saved under `data/synthetic`. The seed-only baseline recommender is now implemented, while adaptive reranking and evaluation work remain ahead.
+Scaffolding and project specification are complete. Phase 2 now uses a deterministic synthetic track catalog, a processed catalog artifact, and deterministic synthetic listening sessions saved under `data/synthetic`. The seed-only baseline recommender and the queue-aware adaptive reranker are now implemented, while evaluation work remains ahead.
 
 ## Dataset Strategy
 
@@ -23,6 +23,7 @@ Phase 2 uses a fully synthetic track catalog with explicit metadata and numeric 
 - `data/synthetic/synthetic_sessions.csv`: deterministic session scenarios for queue-adaptation simulations
 - `src/data/build_sessions.py`: session builders and artifact-writing helpers for the Phase 2 simulation layer
 - `src/models/baseline_seed.py`: deterministic seed-only baseline recommendations over the processed catalog
+- `src/models/adaptive_reranker.py`: deterministic queue-aware reranking on top of the Phase 3 baseline and Phase 4 intent profile
 
 ## Scope
 
