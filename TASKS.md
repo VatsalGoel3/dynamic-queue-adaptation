@@ -2,7 +2,7 @@
 
 ## TODO
 
-- Draft the LinkedIn or Medium summary post
+- None
 
 ## IN PROGRESS
 
@@ -28,6 +28,7 @@
 - Generate evaluation tables and 2 to 3 plots
 - Write the README results section and the whitepaper draft
 - Complete Phase 6 repo polish and reproducibility cleanup, including editable-install package discovery for `src`
+- Draft the LinkedIn summary post and optional release notes for issue #21
 
 ## CUT
 
